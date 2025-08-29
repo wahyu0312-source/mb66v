@@ -70,7 +70,9 @@
     }
 
     .td-measure-grid input.invalid { background:#ffebee; box-shadow:inset 0 0 0 1px #d32f2f; }
-    @media print { .td-measure-grid input.invalid { background:transparent !important; box-shadow:none !important; } }
+    /* invalid umum (contoh: input tanggal text) */
+    input.invalid { background:#ffebee; box-shadow:inset 0 0 0 1px #d32f2f; }
+    @media print { .td-measure-grid input.invalid, input.invalid { background:transparent !important; box-shadow:none !important; } }
 
     .serial-wrap { display:grid; grid-template-columns:auto 1fr; align-items:center; gap:1mm; }
     .serial-prefix { white-space:nowrap; }
@@ -112,9 +114,11 @@
           <td class="section-label">管理No.</td>
           <td>TTS60-01-688</td>
           <td class="section-label">発行年月日</td>
-          <!-- Input teks MM/DD/YYYY -->
           <td>
-            <input type="text" name="hakkohiduke" placeholder="MM/DD/YYYY" class="soft-required" data-soft-required="1" />
+            <!-- YYYY/MM/DD -->
+            <input type="text" name="hakkohiduke" placeholder="YYYY/MM/DD"
+                   inputmode="numeric" maxlength="10"
+                   class="soft-required" data-soft-required="1" />
             <span class="print-text" data-from="hakkohiduke"></span>
           </td>
         </tr>
@@ -251,7 +255,9 @@
       form.querySelectorAll('.td-measure-grid input.invalid').forEach(el => el.classList.remove('invalid'));
       wireEnterNavigationAll(); wireSerialMirror();
       wireSoftRequired(); markSoftRequired();
-      setIssuedTodayIfEmpty(); wireMakingDateMirror(); updateOverallJudgment();
+      wireIssuedDateYMD();   // <-- YYYY/MM/DD
+      wireMakingDateMirror(); 
+      updateOverallJudgment();
     }
 
     /* ==== VALIDASI MEASURE ==== */
@@ -294,15 +300,61 @@
       });
     }
 
-    /* ==== 発行日（MM/DD/YYYY） & 製造日 mirror ==== */
-    function formatMDY(d){ const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); const yyyy=d.getFullYear(); return `${mm}/${dd}/${yyyy}`; }
-    function setIssuedTodayIfEmpty(){
-      const inp=document.querySelector('input[name="hakkohiduke"]');
-      if(!inp) return;
-      if(!inp.value) inp.value = formatMDY(new Date());
-      const span=document.querySelector('.print-text[data-from="hakkohiduke"]'); if(span) span.textContent = inp.value;
-      inp.addEventListener('input',()=>{ if(span) span.textContent = inp.value; markSoftRequired(); });
+    /* ==== 発行年月日（YYYY/MM/DD） & 製造日 mirror ==== */
+    function ymdTodayStr(){
+      const t=new Date(); const y=t.getFullYear(); const m=String(t.getMonth()+1).padStart(2,'0'); const d=String(t.getDate()).padStart(2,'0');
+      return `${y}/${m}/${d}`;
     }
+    function autoFormatYMD(raw){
+      const s=String(raw||'').replace(/\D/g,'').slice(0,8);
+      if(s.length<=4) return s;
+      if(s.length<=6) return `${s.slice(0,4)}/${s.slice(4)}`;
+      return `${s.slice(0,4)}/${s.slice(4,6)}/${s.slice(6)}`;
+    }
+    function parseYMD(str){
+      const m=String(str||'').trim().match(/^(\d{4})[\/\-\.]?(\d{1,2})[\/\-\.]?(\d{1,2})$/);
+      if(!m) return null;
+      const y=+m[1], mo=+m[2], da=+m[3];
+      const dt=new Date(y,mo-1,da);
+      return (dt.getFullYear()===y && dt.getMonth()===mo-1 && dt.getDate()===da) ? dt : null;
+    }
+    function toYMD(dt){
+      const y=dt.getFullYear(); const m=String(dt.getMonth()+1).padStart(2,'0'); const d=String(dt.getDate()).padStart(2,'0');
+      return `${y}/${m}/${d}`;
+    }
+    function wireIssuedDateYMD(){
+      const inp=document.querySelector('input[name="hakkohiduke"]');
+      const span=document.querySelector('.print-text[data-from="hakkohiduke"]');
+      if(!inp) return;
+      if(!inp.value){ inp.value = ymdTodayStr(); }
+      if(span) span.textContent = inp.value;
+
+      inp.addEventListener('input', ()=>{
+        const v=autoFormatYMD(inp.value);
+        if(v!==inp.value){
+          const pos=inp.selectionStart;
+          inp.value=v;
+          try{ inp.setSelectionRange(pos,pos); }catch(e){}
+        }
+        inp.classList.remove('invalid');
+        if(span) span.textContent=inp.value;
+        markSoftRequired();
+      });
+
+      inp.addEventListener('blur', ()=>{
+        const d=parseYMD(inp.value);
+        if(!d){
+          inp.classList.add('invalid');
+          if(span) span.textContent=inp.value;
+        }else{
+          inp.value=toYMD(d);
+          inp.classList.remove('invalid');
+          if(span) span.textContent=inp.value;
+        }
+        markSoftRequired();
+      });
+    }
+
     function wireMakingDateMirror(){
       const inp=document.querySelector('input[name="makingdate"]');
       const span=document.querySelector('.print-text[data-from="makingdate"]');
@@ -501,20 +553,17 @@
       wireEnterNavigationAll(); wireSerialMirror();
       wireSoftRequired(); markSoftRequired();
 
-      setIssuedTodayIfEmpty();      // 発行日 = hari ini (MM/DD/YYYY)
-      wireMakingDateMirror();       // 製造日 → YYYY/MM/DD (print)
+      wireIssuedDateYMD();      // 発行日 = YYYY/MM/DD (auto-format)
+      wireMakingDateMirror();   // 製造日 → YYYY/MM/DD (print)
 
-      // listen perubahan ukuran untuk update 合否
       document.querySelectorAll('.td-measure-grid input').forEach(el=>{
         el.addEventListener('input', updateOverallJudgment);
         el.addEventListener('change', updateOverallJudgment);
       });
       updateOverallJudgment();
 
-      // Ambil digits jika ada setting di server
       try{ const info=await getInfoShared(serverPrefix()); if(typeof info?.digits==='number' && info.digits>=1) PAD_DIGITS=info.digits; }catch(e){}
 
-      // Lock
       await ensureHasLockOrAcquire();
     });
     window.addEventListener('beforeunload', releaseSharedLock);
