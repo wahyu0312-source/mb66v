@@ -23,15 +23,12 @@
     /* ===== table base ===== */
     table { width:100%; border-collapse:collapse; margin-bottom:4mm; }
     th, td { border:.3mm solid #333; padding:1.2mm 1mm; text-align:center; background:#fff; vertical-align:middle; }
-    /* header cells now also white (no gray) */
     th { background:#fff; }
-    /* section label juga putih */
     .section-label { text-align:left; font-weight:bold; background:#fff; }
 
     .header-table td, .header-table th { white-space:nowrap; word-break:keep-all; }
     .header-table input { min-width:0; }
 
-    /* util: paksa isi rata kiri di sel tertentu */
     .ta-left { text-align:left !important; }
 
     .td-measure { padding:0 !important; }
@@ -47,7 +44,7 @@
     .stamp-label { font-size:3mm; margin-bottom:1mm; text-align:center; }
     .signature-box {
       width:15mm; height:15mm; border:.3mm solid #333; border-radius:2mm;
-      background:#fff; /* putihkan kotak stempel */
+      background:#fff;
       display:flex; align-items:center; justify-content:center; overflow:hidden;
     }
     .signature-box img { width:9mm; height:9mm; object-fit:contain; }
@@ -86,7 +83,6 @@
     .serial-wrap { display:grid; grid-template-columns:auto 1fr; align-items:center; gap:1mm; }
     .serial-prefix { white-space:nowrap; }
 
-    /* highlight soft-required tetap (untuk input guide saat layar) */
     .soft-required.pending { background-color:#06e8f8; box-shadow:inset 0 0 0 1px rgba(242,201,76,.25); transition:background-color .25s ease; }
     @media print { .soft-required.pending { background:transparent !important; box-shadow:none !important; } }
   </style>
@@ -463,7 +459,7 @@
     }
 
     // ====== SAVE to NAS (duplicate guard by serial; zero-insensitive) ======
-    const DB_NAME='form-folder-db', STORE='folders'; let __db; const FIXED_KEY='Okuma_MB46V';
+    const DB_NAME='form-folder-db', STORE='folders'; let __db; const FIXED_KEY='Okuma_MB66V';
     function openDB(){ return new Promise((resolve,reject)=>{ const req=indexedDB.open(DB_NAME,1); req.onupgradeneeded=()=>req.result.createObjectStore(STORE); req.onsuccess=()=>{ __db=req.result; resolve(); }; req.onerror=()=>reject(req.error); });}
     async function openDBIfNeeded(){ if(!__db) await openDB(); }
     async function putHandle(key, handle){ await openDBIfNeeded(); return new Promise((res,rej)=>{ const tx=__db.transaction(STORE,'readwrite'); tx.objectStore(STORE).put(handle,key); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
@@ -497,7 +493,7 @@
         }
 
         // Detect duplicate regardless of left padding
-        const rawPrefix = getSerialPrefix(); // ex: 'Y282520-'
+        const rawPrefix = getSerialPrefix(); // ex: 'Y282320-'
         const suffixStr = (document.querySelector('input[name="serial_no_suffix"]').value || '').trim();
         const numeric = parseInt(suffixStr.replace(/^0+/,'') || '0', 10);
         const dupe = await serialExists(dir, sanitize(rawPrefix), numeric);
@@ -542,10 +538,8 @@
     });
     window.addEventListener('beforeunload', releaseSharedLock);
 
-    // dummy—placeholder untuk tombol yang ada di toolbar (agar tidak error jika belum dibuat)
     function configureNextSerial(){ alert('未実装: 次番号設定'); }
     function configureDigits(){ alert('未実装: 桁数設定'); }
   </script>
 </body>
 </html>
-
