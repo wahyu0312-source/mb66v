@@ -225,11 +225,35 @@
     function updateStampPreview(id, src){ document.getElementById(id).src = src || ''; }
     function clearAllFields(){
       const form = document.getElementById('inspection-form');
+
+      // --- Keep 製造No (prefix & suffix) before reset ---
+      const keepPrefix = getSerialPrefix();
+      const keepSuffixRaw = (document.querySelector('input[name="serial_no_suffix"]')?.value || '');
+      const keepSuffixNum = parseInt(keepSuffixRaw.replace(/[^\d]/g,''), 10);
+
+      // --- Reset the form ---
       form.reset();
       ['stamp1','stamp2'].forEach(id => document.getElementById(id).src = '');
       form.querySelectorAll('.td-measure-grid input.invalid').forEach(el => el.classList.remove('invalid'));
-      wireDateMirror(); wireEnterNavigationAll(); wireSerialMirror(); wireSoftRequired(); markSoftRequired();
-      setTodayIfEmpty('hakkohiduke'); applyPrefix();
+
+      // --- Re-wire & defaults (do NOT recompute prefix here) ---
+      wireDateMirror();
+      wireEnterNavigationAll();
+      wireSerialMirror();
+      wireSoftRequired();
+      markSoftRequired();
+      setTodayIfEmpty('hakkohiduke');
+
+      // --- Restore 製造No ---
+      const span = document.querySelector('.serial-prefix');
+      if (span && keepPrefix) span.textContent = keepPrefix;
+      if (Number.isFinite(keepSuffixNum)) setSerialSuffix(keepSuffixNum);
+
+      // Update print preview text
+      const out = document.querySelector('[data-serial-print]');
+      if (out) out.textContent = getSerialFull();
+
+      // IMPORTANT: do NOT call applyPrefix() here, so serial prefix stays untouched by reset
     }
 
     // numeric validator
@@ -274,7 +298,7 @@
     function wireDateMirror(){
       document.querySelectorAll('input[type="date"]').forEach(inp=>{
         const span=document.querySelector(`.print-text[data-from="${inp.name}"]`); if(!span) return;
-        const fmt=v=>v?v.replace(/(\\d{4})-(\\d{2})-(\\d{2})/,'$1/$2/$3'):'';
+        const fmt=v=>v?v.replace(/(\d{4})-(\d{2})-(\d{2})/,'$1/$2/$3'):'';
         const upd=()=>span.textContent=fmt(inp.value);
         inp.addEventListener('change',()=>{ upd(); markSoftRequired(); }); upd();
       });
@@ -304,7 +328,7 @@
     const getZuban = () => (document.querySelector('input[name="zuban"]').value || '').trim();
     const getSerialFull = () => {
       const p = getSerialPrefix();
-      const s = (document.querySelector('input[name="serial_no_suffix"]').value || '').replace(/[^\\d]/g,'').trim();
+      const s = (document.querySelector('input[name="serial_no_suffix"]').value || '').replace(/[^\d]/g,'').trim();
       return s ? (p + s) : p;
     };
     function formatSuffix(num){ const s = String(num); return s.length >= PAD_DIGITS ? s : ('0'.repeat(PAD_DIGITS - s.length) + s); }
@@ -321,7 +345,7 @@
       inp?.addEventListener('input', upd); upd();
     }
     function computePrefixFromZuban(z){
-      const m = String(z||'').match(/^(\\d{4})/);  // 先頭4桁
+      const m = String(z||'').match(/^(\d{4})/);  // 先頭4桁
       return m ? `${m[1]}-` : '';
     }
     function applyPrefix(){
@@ -329,7 +353,7 @@
       const pref = computePrefixFromZuban(z);
       const span = document.querySelector('.serial-prefix'); if(span) span.textContent = pref;
     }
-    function prefixReady(){ return /^\\d{4}-$/.test(getSerialPrefix()); }
+    function prefixReady(){ return /^\d{4}-$/.test(getSerialPrefix()); }
 
     /* ===== GAS API ===== */
     async function apiGAS(body){
@@ -436,7 +460,7 @@
       if(!dir?.entries) return false;
       const pattern = new RegExp(`_${prefix}0*${numeric}\\.pdf$`);
       for await (const [name] of dir.entries()){
-        if(/\\.pdf$/i.test(name) && pattern.test(name)) return name;
+        if(/\.pdf$/i.test(name) && pattern.test(name)) return name;
       }
       return false;
     }
@@ -473,14 +497,14 @@
         const suffixStr = (document.querySelector('input[name="serial_no_suffix"]').value || '').trim();
         const numeric = parseInt(suffixStr.replace(/^0+/,'') || '0', 10);
         const dupe = await serialExists(dir, sanitize(rawPrefix), numeric);
-        if(dupe){ alert(`同じ製造Noのファイルが既に存在します:\\n${dupe}\\n保存を中止しました。`); return; }
+        if(dupe){ alert(`同じ製造Noのファイルが既に存在します:\n${dupe}\n保存を中止しました。`); return; }
 
         const doc = await buildPdfDoc();
         const fh = await dir.getFileHandle(fileName, { create:true });
         const w = await fh.createWritable();
         await w.write(doc.output('blob')); await w.close();
         const t=new Date();
-        alert(`保存しました: ${fileName}\\n時刻: ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`);
+        alert(`保存しました: ${fileName}\n時刻: ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`);
       }catch(e){
         console.error('NAS write failed; fallback to download.', e);
         const doc = await buildPdfDoc(); doc.save(fileName);
@@ -520,9 +544,9 @@
         const info = await getInfoShared(prefix);
         const curNext = (typeof info?.next === 'number') ? info.next : null;
         const digits  = (typeof info?.digits === 'number') ? info.digits : PAD_DIGITS;
-        const s = prompt(`対象プレフィックス: ${prefix}\\n現在の桁数: ${digits}\\n現在の次番号: ${curNext ?? '(不明)'}\\n\\n設定したい「次番号」を整数で入力してください`, curNext != null ? String(curNext) : '');
+        const s = prompt(`対象プレフィックス: ${prefix}\n現在の桁数: ${digits}\n現在の次番号: ${curNext ?? '(不明)'}\n\n設定したい「次番号」を整数で入力してください`, curNext != null ? String(curNext) : '');
         if (s == null) return;
-        const val = parseInt(String(s).replace(/[^\\d]/g,''), 10);
+        const val = parseInt(String(s).replace(/[^\d]/g,''), 10);
         if (!Number.isFinite(val) || val < 0) { alert('整数を入力してください'); return; }
         await setNextSuffixShared(prefix, val);
         setSerialSuffix(val);
@@ -535,9 +559,9 @@
       try{
         const info = await getInfoShared(prefix);
         const cur = (typeof info?.digits === 'number') ? info.digits : PAD_DIGITS;
-        const s = prompt(`対象プレフィックス: ${prefix}\\n新しい桁数（1〜8）を入力してください`, String(cur));
+        const s = prompt(`対象プレフィックス: ${prefix}\n新しい桁数（1〜8）を入力してください`, String(cur));
         if (s == null) return;
-        const n = parseInt(String(s).replace(/[^\\d]/g,''), 10);
+        const n = parseInt(String(s).replace(/[^\d]/g,''), 10);
         if (!Number.isFinite(n) || n < 1 || n > 8) { alert('1〜8の整数で入力してください'); return; }
         await setDigitsShared(prefix, n);
         PAD_DIGITS = n;
